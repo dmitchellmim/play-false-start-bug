@@ -8,7 +8,7 @@ import java.security.KeyStore;
 
 public class CustomSSLEngineProvider implements SSLEngineProvider {
 
-    private static final String KEYSTORE_LOCATION = "conf/selfsigned.keystore";
+    private static final String KEYSTORE_LOCATION = "conf/keystore.jks";
     private static final char[] PASSPHRASE = "".toCharArray();
 
     public CustomSSLEngineProvider() { }
