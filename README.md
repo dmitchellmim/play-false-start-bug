@@ -1,51 +1,19 @@
-# play-java-starter-example
+# Sample project for intermittent TLS False Start failure
 
-This is a starter application that shows how Play works.  Please see the documentation at https://www.playframework.com/documentation/latest/Home for more details.
+[Firefox enables TLS False Start](https://security.stackexchange.com/questions/184616/firefox-sending-application-data-in-middle-of-ssl-handshake), a feature in which the client may send the HTTP request in the middle of the TLS handshake. When Firefox issues a False Start, Play's Akka HTTP server seems to intermittently drop the HTTP request. When this happens, the connection remains open for 75 seconds until `akka.http.impl.engine.HttpIdleTimeoutException: HTTP idle-timeout encountered, no bytes passed in the last 75 seconds. This is configurable by akka.http.[server|client].idle-timeout`, the connection is reset, and Firefox tries again. Sometimes it works after the reset, but other times it takes two cycles (150 seconds), three cycles (225 seconds), or more.
+
+I've reproduced the problem on Windows, Mac, and CentOS, both Play 2.6 and 2.7. [Running Play on Netty](https://www.playframework.com/documentation/2.7.x/NettyServer) doesn't seem to have the problem. It happens more frequently on my more complicated project, but still happens sometimes on this minimal example project. Which SSL certificate I use also seems to have an effect. I generated a self-signed certificate for this project, but it also occurs with an officially trusted certificate.
+
+See the `Wireshark` directory for Wireshark output. The client sends the HTTP request via False Start at frame 37 among other places. The server immediately ACKs it and completes the TLS handshake (39: Change Cipher Spec and 41: Encrypted Handshake Message), but the server never responds with Application Data. There's a TCP keep-alive every 10 seconds until the connection is reset after 75 seconds (frame 69).
 
 ## Running
 
-Run this using [sbt](http://www.scala-sbt.org/).  If you downloaded this project from http://www.playframework.com/download then you'll find a prepackaged version of sbt in the project directory:
+This project is based on the [Java hello world project](https://github.com/playframework/play-samples/tree/2.7.x/play-java-hello-world-tutorial) and has been modified to reproduce the problem (albeit inconsistently).
+
+Run the project with:
 
 ```
-sbt run
+sbt -Dhttps.port=9443 -Dplay.server.https.engineProvider="CustomSSLEngineProvider" run
 ```
 
-And then go to http://localhost:9000 to see the running web application.
-
-## Controllers
-
-There are several demonstration files available in this template.
-
-- `HomeController.java`:
-
-  Shows how to handle simple HTTP requests.
-
-- `AsyncController.java`:
-
-  Shows how to do asynchronous programming when handling a request.
-
-- `CountController.java`:
-
-  Shows how to inject a component into a controller and use the component when
-  handling requests.
-
-## Components
-
-- `Module.java`:
-
-  Shows how to use Guice to bind all the components needed by your application.
-
-- `Counter.java`:
-
-  An example of a component that contains state, in this case a simple counter.
-
-- `ApplicationTimer.java`:
-
-  An example of a component that starts when the application starts and stops
-  when the application stops.
-
-## Filters
-
-- `ExampleFilter.java`:
-
-  A simple filter that adds a header to every response.
+Visit https://localhost:9443 in Firefox, clicking "Accept the Risk and Continue" at the warning. The page will occasionally take a long time—some multiple of 75 seconds—to load. You may need to refresh the page multiple times for the problem to occur. It sometimes takes me 5-10 tries with this example project, but happens almost every time with my more complicated project.
